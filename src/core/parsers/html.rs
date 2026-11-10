@@ -9,8 +9,19 @@ pub fn extract_article_markdown(html_raw: &str) -> Result<String, AppError> {
 
     let mut buffer = String::with_capacity(html_raw.len() / 2);
 
-    // tl query_selector takes single selectors, not comma-separated lists
-    let content_selectors = ["article", "main", "[role='main']", "body"];
+    // Prioritize high-value article/content containers first
+    let content_selectors = [
+        "[itemprop='articleBody']",
+        ".article-body",
+        ".article-content",
+        ".post-content",
+        ".entry-content",
+        ".markdown-body",
+        "article",
+        "main",
+        "[role='main']",
+        "body",
+    ];
     let mut root_handle = None;
 
     for selector in content_selectors {
@@ -54,13 +65,14 @@ pub fn extract_article_markdown(html_raw: &str) -> Result<String, AppError> {
 fn traverse_and_build(node: &Node, parser: &tl::Parser, out: &mut String, inside_pre: bool) {
     match node {
         Node::Tag(tag) => {
+            // Drop ads, banners, popups, cookie consent notices, sidebars, and non-content elements
+            if is_noise_or_ad_tag(tag) {
+                return;
+            }
+
             let name = tag.name().as_utf8_str();
 
-            // Skip uninformative or noisy tags
             match name.as_ref() {
-                "script" | "style" | "noscript" | "svg" | "nav" | "footer" 
-                | "header" | "aside" | "iframe" | "button" | "input" | "select"
-                | "shreddit-ad-post" | "shreddit-comment-tree-ad" | "faceplate-banner" => return,
                 "h1" => out.push_str("\n\n# "),
                 "h2" => out.push_str("\n\n## "),
                 "h3" => out.push_str("\n\n### "),
@@ -82,11 +94,7 @@ fn traverse_and_build(node: &Node, parser: &tl::Parser, out: &mut String, inside
                     }
                     out.push('[');
                 }
-                _ => {
-                    if is_ad_or_sponsored_tag(tag) {
-                        return;
-                    }
-                }
+                _ => {}
             }
 
             let is_pre = inside_pre || name.as_ref() == "pre";
@@ -159,32 +167,93 @@ fn decode_html_entities(input: &str) -> String {
         .replace("&nbsp;", " ")
 }
 
-fn is_ad_or_sponsored_tag(tag: &tl::HTMLTag) -> bool {
+fn is_noise_or_ad_tag(tag: &tl::HTMLTag) -> bool {
     let name = tag.name().as_utf8_str();
-    if name.contains("-ad-") || name.ends_with("-ad") || name.starts_with("ad-") {
+    let name_ref = name.as_ref();
+
+    // 1. Non-content standard HTML tags
+    match name_ref {
+        "script" | "style" | "noscript" | "svg" | "canvas" | "iframe" | "frame"
+        | "nav" | "footer" | "header" | "aside" | "dialog" | "button" | "input"
+        | "select" | "textarea" | "form" => return true,
+        _ => {}
+    }
+
+    // 2. Custom ad web components (Reddit, AMP, etc.)
+    if name_ref.contains("-ad-")
+        || name_ref.ends_with("-ad")
+        || name_ref.starts_with("ad-")
+        || name_ref.contains("banner")
+        || name_ref.contains("sponsor")
+    {
         return true;
     }
 
-    if let Some(Some(class_bytes)) = tag.attributes().get("class") {
-        let class_str = class_bytes.as_utf8_str().to_ascii_lowercase();
-        if class_str.contains("promotedlink")
-            || class_str.contains("ad-container")
-            || class_str.contains("sponsored-post")
-            || class_str.contains("ad-unit")
-            || class_str.contains("reddit-ad")
-        {
+    // 3. ARIA roles for non-content UI landmarks (headers, navigation, sidebars, footers)
+    if let Some(Some(role)) = tag.attributes().get("role") {
+        let r = role.as_utf8_str().to_ascii_lowercase();
+        if matches!(r.as_str(), "banner" | "navigation" | "complementary" | "contentinfo") {
             return true;
         }
     }
 
+    // 4. Class inspection for ads, cookie banners, popups, and social bars
+    if let Some(Some(class_bytes)) = tag.attributes().get("class") {
+        let c = class_bytes.as_utf8_str().to_ascii_lowercase();
+        if contains_non_content_marker(&c) {
+            return true;
+        }
+    }
+
+    // 5. ID inspection
+    if let Some(Some(id_bytes)) = tag.attributes().get("id") {
+        let id_str = id_bytes.as_utf8_str().to_ascii_lowercase();
+        if contains_non_content_marker(&id_str) {
+            return true;
+        }
+    }
+
+    // 6. Test ID / Ad attributes
     if let Some(Some(testid)) = tag.attributes().get("data-testid") {
-        let testid_str = testid.as_utf8_str().to_ascii_lowercase();
-        if testid_str.contains("ad-post") || testid_str.contains("sponsored") {
+        let t = testid.as_utf8_str().to_ascii_lowercase();
+        if t.contains("ad-") || t.contains("sponsor") || t.contains("promo") {
             return true;
         }
     }
 
     false
+}
+
+fn contains_non_content_marker(s: &str) -> bool {
+    // Exact or separated tokens
+    for token in s.split(|c: char| c.is_whitespace() || c == '_' || c == '-') {
+        match token {
+            "ad" | "ads" | "advert" | "advertisement" | "advertising"
+            | "sponsored" | "sponsor" | "promoted" | "promotedlink"
+            | "taboola" | "outbrain" | "adsbygoogle" | "criteo" | "carbonads"
+            | "cookie" | "cookies" | "gdpr" | "consent"
+            | "popup" | "modal" | "overlay" | "toast"
+            | "share" | "sharing" | "sharebar" | "socialshare"
+            | "newsletter" | "subscribe" | "signup"
+            | "sidebar" | "breadcrumb" | "breadcrumbs" | "pagination" | "pager" => return true,
+            _ => {}
+        }
+    }
+
+    // Compound phrases
+    s.contains("ad-container")
+        || s.contains("ad-box")
+        || s.contains("ad-unit")
+        || s.contains("ad-banner")
+        || s.contains("ad-wrapper")
+        || s.contains("ad-slot")
+        || s.contains("banner-ad")
+        || s.contains("cookie-banner")
+        || s.contains("cookie-notice")
+        || s.contains("social-share")
+        || s.contains("share-buttons")
+        || s.contains("share-bar")
+        || s.contains("newsletter-signup")
 }
 
 #[cfg(test)]
@@ -265,5 +334,42 @@ mod tests {
         let md = extract_article_markdown(html).unwrap();
         assert!(md.contains("### Fragment Header"));
         assert!(md.contains("Fragment text"));
+    }
+
+    #[test]
+    fn test_strip_cookie_sidebar_and_newsletter_widgets() {
+        let html = r#"
+            <body>
+                <header class="site-header">
+                    <nav class="nav-menu">Home | About | Blog</nav>
+                </header>
+                <div class="cookie-banner">
+                    <p>We use cookies to improve your browsing experience. Accept all cookies.</p>
+                </div>
+                <div role="complementary" class="sidebar">
+                    <h3>Popular Posts</h3>
+                    <p>Sidebar link 1</p>
+                </div>
+                <article class="entry-content">
+                    <h1>Real Article Content</h1>
+                    <p>This is the actual article paragraph that should be preserved.</p>
+                </article>
+                <div class="newsletter-signup">
+                    <p>Subscribe to our newsletter for weekly updates!</p>
+                </div>
+                <footer role="contentinfo">
+                    <p>Copyright 2026. All rights reserved.</p>
+                </footer>
+            </body>
+        "#;
+        let md = extract_article_markdown(html).unwrap();
+        assert!(md.contains("# Real Article Content"));
+        assert!(md.contains("This is the actual article paragraph that should be preserved."));
+
+        // Verify non-content noise and widgets are stripped
+        assert!(!md.contains("Accept all cookies"));
+        assert!(!md.contains("Popular Posts"));
+        assert!(!md.contains("Subscribe to our newsletter"));
+        assert!(!md.contains("Home | About | Blog"));
     }
 }
