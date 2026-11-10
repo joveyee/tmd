@@ -1,5 +1,8 @@
 # tmd (`tokens-md-rs`)
 
+> ⚠️ **Notice: Early Development / Testing Stage**
+> This project is currently in active development and testing. It is not ready for production use, and breaking changes may occur without notice.
+
 High-performance Rust drop-in engine for LLM token optimization. `tmd` strips boilerplate, navigation elements, duplicates, and redundant metadata from HTML, Markdown, and source code to output token-dense, context-window-friendly Markdown.
 
 ---

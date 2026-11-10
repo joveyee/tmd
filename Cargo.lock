@@ -2177,7 +2177,7 @@ checksum = "b130bd8a58c163224b44e217b4239ca7b927d82bf6cc2fea1fc561d15056e3f7"
 
 [[package]]
 name = "tokens-md-rs"
-version = "0.1.0"
+version = "0.1.0-dev"
 dependencies = [
  "assert_cmd",
  "axum",
