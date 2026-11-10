@@ -9,17 +9,17 @@ pub fn extract_article_markdown(html_raw: &str) -> Result<String, AppError> {
 
     let mut buffer = String::with_capacity(html_raw.len() / 2);
 
-    // Prioritize high-value article/content containers first
+    // Prioritize main content containers so forum discussions & comments are captured
     let content_selectors = [
+        "main",
+        "[role='main']",
+        "article",
         "[itemprop='articleBody']",
         ".article-body",
         ".article-content",
         ".post-content",
         ".entry-content",
         ".markdown-body",
-        "article",
-        "main",
-        "[role='main']",
         "body",
     ];
     let mut root_handle = None;
