@@ -46,6 +46,35 @@ pub fn extract_article_markdown(html_raw: &str) -> Result<String, AppError> {
         }
     }
 
+    // Capture discussion comments if they sit outside the main post container (e.g. Reddit, modern forums)
+    let comment_selectors = ["shreddit-comment", "#comment-tree", ".comment-tree", "#comments", ".comments-area"];
+    for sel in comment_selectors {
+        if let Some(iter) = dom.query_selector(sel) {
+            let mut found_any = false;
+            for handle in iter {
+                if let Some(node) = handle.get(parser) {
+                    let mut comment_chunk = String::new();
+                    traverse_and_build(node, parser, &mut comment_chunk, false);
+                    let trimmed = comment_chunk.trim();
+                    if !trimmed.is_empty() && !buffer.contains(trimmed) {
+                        if !found_any {
+                            buffer.push_str("\n\n## Comments\n\n");
+                            found_any = true;
+                        }
+                        buffer.push_str(trimmed);
+                        buffer.push_str("\n\n");
+                    }
+                }
+                if sel == "#comment-tree" || sel == ".comment-tree" || sel == "#comments" || sel == ".comments-area" {
+                    break;
+                }
+            }
+            if found_any {
+                break;
+            }
+        }
+    }
+
     let mut cleaned = buffer.trim().to_string();
 
     // Extract rich content embedded inside inline scripts (JSON-LD, Next.js hydration, JS data arrays, template literals)
@@ -334,6 +363,24 @@ mod tests {
         let md = extract_article_markdown(html).unwrap();
         assert!(md.contains("### Fragment Header"));
         assert!(md.contains("Fragment text"));
+    }
+
+    #[test]
+    fn test_reddittest_html_file() {
+        if let Ok(html) = std::fs::read_to_string("target/release/reddittest.html") {
+            let md = extract_article_markdown(&html).unwrap();
+            assert!(md.contains("# Post some really simple pure HTML Websites"));
+            assert!(md.contains("## Comments"));
+            assert!(md.contains("1mb.club"));
+        }
+    }
+
+    #[test]
+    fn test_tl_custom_element() {
+        let html = "<shreddit-app><p>Hello world</p></shreddit-app>";
+        let dom = tl::parse(html, ParserOptions::default()).unwrap();
+        let handle = dom.query_selector("shreddit-app").and_then(|mut i| i.next());
+        assert!(handle.is_some());
     }
 
     #[test]
