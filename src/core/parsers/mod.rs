@@ -1,5 +1,6 @@
 pub mod html;
 pub mod pdf_docx;
+pub mod script_extractor;
 pub mod text;
 
 use crate::error::AppError;

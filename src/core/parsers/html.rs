@@ -35,12 +35,17 @@ pub fn extract_article_markdown(html_raw: &str) -> Result<String, AppError> {
         }
     }
 
-    let cleaned = buffer.trim().to_string();
+    let mut cleaned = buffer.trim().to_string();
 
-    if cleaned.len() < 150 && html_raw.contains("<script") {
-        eprintln!(
-            "Note: Content is sparse. The page's text may be hydrated dynamically via JavaScript."
-        );
+    // Extract rich content embedded inside inline scripts (JSON-LD, Next.js hydration, JS data arrays, template literals)
+    let script_content = crate::core::parsers::script_extractor::extract_inline_script_content(html_raw);
+    if !script_content.is_empty() {
+        if cleaned.is_empty() {
+            cleaned = script_content;
+        } else {
+            cleaned.push_str("\n\n---\n\n");
+            cleaned.push_str(&script_content);
+        }
     }
 
     Ok(cleaned)
@@ -70,6 +75,12 @@ fn traverse_and_build(node: &Node, parser: &tl::Parser, out: &mut String, inside
                     }
                     out.push('`');
                 }
+                "a" => {
+                    if !out.is_empty() && !out.ends_with(' ') && !out.ends_with('\n') && !out.ends_with('(') {
+                        out.push(' ');
+                    }
+                    out.push('[');
+                }
                 _ => {}
             }
 
@@ -96,6 +107,22 @@ fn traverse_and_build(node: &Node, parser: &tl::Parser, out: &mut String, inside
                         out.pop();
                     }
                     out.push('`');
+                }
+                "a" => {
+                    if out.ends_with(' ') {
+                        out.pop();
+                    }
+                    if let Some(Some(href)) = tag.attributes().get("href") {
+                        let href_str = href.as_utf8_str();
+                        let href_trim = href_str.trim();
+                        if !href_trim.is_empty() && !href_trim.starts_with('#') && !href_trim.starts_with("javascript:") {
+                            out.push_str(&format!("]({})", href_trim));
+                        } else {
+                            out.push(']');
+                        }
+                    } else {
+                        out.push(']');
+                    }
                 }
                 _ => {}
             }
