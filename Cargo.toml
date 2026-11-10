@@ -2,7 +2,7 @@
 name = "tokens-md-rs"
 version = "0.1.0"
 edition = "2021"
-authors = ["Systems Architect <joveyee@gmail.com>"]
+authors = ["Systems Architect <joveyee>"]
 description = "High-performance Rust drop-in replacement for tokens.md"
 license = "GPL-3.0-or-later"
 
