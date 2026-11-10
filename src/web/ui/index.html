@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>tokens.md-rs UI</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 900px; margin: 40px auto; padding: 0 20px; background: #0f172a; color: #f8fafc; }
+    h1 { color: #38bdf8; }
+    .dropzone { border: 2px dashed #38bdf8; border-radius: 8px; padding: 40px; text-align: center; cursor: pointer; margin-bottom: 20px; }
+    textarea { width: 100%; height: 250px; background: #1e293b; color: #f8fafc; border: 1px solid #475569; border-radius: 6px; padding: 12px; font-family: monospace; }
+    .stats { display: flex; gap: 20px; margin: 15px 0; font-weight: bold; }
+    .badge { background: #0284c7; padding: 6px 12px; border-radius: 4px; }
+  </style>
+</head>
+<body>
+  <h1>tokens.md (Rust)</h1>
+  <div class="dropzone" id="dz">Drag & Drop files here or click to upload</div>
+  <input type="file" id="fileInput" style="display: none;">
+  <div class="stats">
+    <div class="badge">Raw Tokens: <span id="raw">0</span></div>
+    <div class="badge">Optimized: <span id="opt">0</span></div>
+    <div class="badge">Savings: <span id="savings">0%</span></div>
+  </div>
+  <textarea id="out" placeholder="Optimized Markdown appears here..." readonly></textarea>
+
+  <script>
+    const dz = document.getElementById('dz');
+    const fi = document.getElementById('fileInput');
+    dz.onclick = () => fi.click();
+    dz.ondragover = e => e.preventDefault();
+    dz.ondrop = e => { e.preventDefault(); handleFile(e.dataTransfer.files[0]); };
+    fi.onchange = e => handleFile(e.target.files[0]);
+
+    async function handleFile(file) {
+      if (!file) return;
+      const text = await file.text();
+      const res = await fetch('/api/convert', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ content: text, filename: file.name })
+      });
+      const data = await res.json();
+      document.getElementById('out').value = data.markdown;
+      document.getElementById('raw').innerText = data.metrics.raw_tokens;
+      document.getElementById('opt').innerText = data.metrics.optimized_tokens;
+      document.getElementById('savings').innerText = data.metrics.savings_percentage + '%';
+    }
+  </script>
+</body>
+</html>

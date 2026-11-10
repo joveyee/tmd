@@ -1,0 +1,67 @@
+[package]
+name = "tokens-md-rs"
+version = "0.1.0"
+edition = "2021"
+authors = ["Systems Architect <dev@example.com>"]
+description = "High-performance Rust drop-in replacement for tokens.md"
+
+[[bin]]
+name = "tmd"
+path = "src/main.rs"
+
+[features]
+default = []
+full = ["pdf", "docx"]
+pdf = ["dep:pdf-extract"]
+docx = ["dep:docx-lite"]
+
+[dependencies]
+# Optional Document Parsers (Feature-gated)
+pdf-extract = { version = "0.12", optional = true }
+docx-lite = { version = "0.2", optional = true }
+
+# CLI Parsing
+clap = { version = "4.5", features = ["derive", "cargo", "env"] }
+
+# Asynchronous Runtime & Networking
+tokio = { version = "1.40", features = ["full"] }
+axum = { version = "0.7", features = ["multipart"] }
+tower = { version = "0.4", features = ["util"] }
+tower-http = { version = "0.5", features = ["cors", "trace"] }
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json"] }
+
+# HTML Parsing (Ultra-fast zero-copy DOM)
+tl = "0.7"
+
+# Token Counting (Exact BPE)
+tiktoken-rs = "0.5"
+
+# File System & Concurrency
+notify = "6.1"
+ignore = "0.4"
+rayon = "1.10"
+
+# Embedded Static Assets for Local Web UI
+rust-embed = { version = "8.5", features = ["interpolate-folder-path"] }
+mime_guess = "2.0"
+
+# Serialization & Error Handling
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+thiserror = "1.0"
+
+# Observability
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+[dev-dependencies]
+assert_cmd = "2.0"
+predicates = "3.1"
+tempfile = "3.12"
+
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+panic = "abort"
+strip = true
