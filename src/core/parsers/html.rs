@@ -148,7 +148,9 @@ fn decode_html_entities(input: &str) -> String {
         .replace("&gt;", ">")
         .replace("&quot;", "\"")
         .replace("&#39;", "'")
+        .replace("&#x27;", "'")
         .replace("&apos;", "'")
+        .replace("&#x22;", "\"")
         .replace("&nbsp;", " ")
 }
 
