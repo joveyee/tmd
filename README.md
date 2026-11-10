@@ -75,4 +75,5 @@ cargo test --features full
 
 ## License
 
-MIT OR Apache-2.0
+GPL-3.0 (GNU General Public License v3.0)
+
