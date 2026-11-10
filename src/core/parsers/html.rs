@@ -59,7 +59,8 @@ fn traverse_and_build(node: &Node, parser: &tl::Parser, out: &mut String, inside
             // Skip uninformative or noisy tags
             match name.as_ref() {
                 "script" | "style" | "noscript" | "svg" | "nav" | "footer" 
-                | "header" | "aside" | "iframe" | "button" | "input" | "select" => return,
+                | "header" | "aside" | "iframe" | "button" | "input" | "select"
+                | "shreddit-ad-post" | "shreddit-comment-tree-ad" | "faceplate-banner" => return,
                 "h1" => out.push_str("\n\n# "),
                 "h2" => out.push_str("\n\n## "),
                 "h3" => out.push_str("\n\n### "),
@@ -81,7 +82,11 @@ fn traverse_and_build(node: &Node, parser: &tl::Parser, out: &mut String, inside
                     }
                     out.push('[');
                 }
-                _ => {}
+                _ => {
+                    if is_ad_or_sponsored_tag(tag) {
+                        return;
+                    }
+                }
             }
 
             let is_pre = inside_pre || name.as_ref() == "pre";
@@ -154,9 +159,72 @@ fn decode_html_entities(input: &str) -> String {
         .replace("&nbsp;", " ")
 }
 
+fn is_ad_or_sponsored_tag(tag: &tl::HTMLTag) -> bool {
+    let name = tag.name().as_utf8_str();
+    if name.contains("-ad-") || name.ends_with("-ad") || name.starts_with("ad-") {
+        return true;
+    }
+
+    if let Some(Some(class_bytes)) = tag.attributes().get("class") {
+        let class_str = class_bytes.as_utf8_str().to_ascii_lowercase();
+        if class_str.contains("promotedlink")
+            || class_str.contains("ad-container")
+            || class_str.contains("sponsored-post")
+            || class_str.contains("ad-unit")
+            || class_str.contains("reddit-ad")
+        {
+            return true;
+        }
+    }
+
+    if let Some(Some(testid)) = tag.attributes().get("data-testid") {
+        let testid_str = testid.as_utf8_str().to_ascii_lowercase();
+        if testid_str.contains("ad-post") || testid_str.contains("sponsored") {
+            return true;
+        }
+    }
+
+    false
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_reddit_post_strips_ads_and_keeps_comments() {
+        let html = r#"
+            <main>
+                <h1>What are your goals for Rust in 2024?</h1>
+                <p>I want to finish rewriting my web server in async Rust.</p>
+
+                <!-- Reddit Advertisement Block -->
+                <shreddit-ad-post>
+                    <h2>Special Offer from Cloud Sponsor!</h2>
+                    <p>Buy cloud servers now at 50% discount.</p>
+                </shreddit-ad-post>
+
+                <div class="promotedlink">
+                    <p>Sponsored gaming promotion ad.</p>
+                </div>
+
+                <!-- Actual Thread Comments -->
+                <div class="comment">
+                    <p>My goal is to learn macro_rules! and proc-macros.</p>
+                </div>
+            </main>
+        "#;
+
+        let md = extract_article_markdown(html).unwrap();
+        assert!(md.contains("# What are your goals for Rust in 2024?"));
+        assert!(md.contains("I want to finish rewriting my web server"));
+        assert!(md.contains("My goal is to learn macro_rules!"));
+        
+        // Ensure advertisements are completely stripped
+        assert!(!md.contains("Special Offer from Cloud Sponsor"));
+        assert!(!md.contains("50% discount"));
+        assert!(!md.contains("Sponsored gaming promotion ad"));
+    }
 
     #[test]
     fn test_html_parsing_headings_and_lists() {

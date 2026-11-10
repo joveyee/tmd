@@ -57,7 +57,11 @@ pub async fn run_app() -> Result<(), AppError> {
 
         Commands::Fetch(args) => {
             info!("Fetching remote target: {}", args.url);
-            let resp = reqwest::get(&args.url).await?.text().await?;
+            let client = reqwest::Client::builder()
+                .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
+                .build()
+                .map_err(|e| AppError::Processing(e.to_string()))?;
+            let resp = client.get(&args.url).send().await?.text().await?;
             let markdown = extract_article_markdown(&resp)?;
 
             let mut optimizer = ContentOptimizer::new();
