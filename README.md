@@ -6,6 +6,10 @@
 High-performance Rust drop-in engine for LLM token optimization. `tmd` strips boilerplate, navigation elements, duplicates, and redundant metadata from HTML, Markdown, and source code to output token-dense, context-window-friendly Markdown.
 
 ---
+### 💡 What `tmd` Is (and Isn't)
+* ✅ **What it DOES:** Cleans and compresses raw documents by stripping ads, headers, footers, pagination, and identical paragraphs. You get the full, unadulterated content at a fraction of the token cost.
+* ❌ **What it DOES NOT do:** It is **not** an AI text summarizer. It does not rewrite or alter your content. It is a blazing-fast, deterministic pre-processor designed to run *before* you pass text into an LLM.
+---
 
 ## Features
 
