@@ -22,6 +22,8 @@ pub struct ConvertPayload {
 pub struct ConvertResponse {
     pub markdown: String,
     pub metrics: TokenMetrics,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source: Option<String>,
 }
 
 pub async fn convert_handler(
@@ -42,6 +44,7 @@ pub async fn convert_handler(
     Ok(Json(ConvertResponse {
         markdown: optimized,
         metrics,
+        source: None,
     }))
 }
 
@@ -65,5 +68,6 @@ pub async fn fetch_handler(
     Ok(Json(ConvertResponse {
         markdown: optimized,
         metrics,
+        source: Some(html),
     }))
 }
